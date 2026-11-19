@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>试穿效果打分</title>
+<style>
+  body { font-family: -apple-system, "PingFang SC", sans-serif; margin: 0; background: #f6f6f6; color: #222; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 12px; }
+  h1 { font-size: 20px; margin: 8px 0; }
+  .card { background: #fff; border-radius: 10px; padding: 12px; margin: 10px 0; }
+  .imgs { display: grid; grid-template-columns: 1fr 1fr 1.4fr; gap: 6px; }
+  .imgs figure { margin: 0; text-align: center; font-size: 13px; color: #666; }
+  .imgs img { width: 100%; border-radius: 6px; cursor: zoom-in; background: #eee; }
+  .q { margin: 10px 0; }
+  .q b { display: block; margin-bottom: 4px; }
+  .q small { color: #888; }
+  .opts { display: flex; gap: 6px; flex-wrap: wrap; }
+  .opts button { flex: 1; min-width: 44px; padding: 10px 0; font-size: 16px; border: 1px solid #ccc; background: #fff; border-radius: 6px; }
+  .opts button.on { background: #2563eb; color: #fff; border-color: #2563eb; }
+  .hint { font-size: 13px; color: #555; min-height: 18px; margin-top: 3px; }
+  .nav { display: flex; gap: 8px; }
+  .nav button, .big { flex: 1; padding: 12px; font-size: 16px; border-radius: 8px; border: 0; background: #2563eb; color: #fff; }
+  .nav button.sec { background: #ddd; color: #222; }
+  button:disabled { opacity: .4; }
+  .bar { height: 8px; background: #ddd; border-radius: 4px; overflow: hidden; }
+  .bar div { height: 100%; background: #16a34a; }
+  input[type=text] { width: 100%; box-sizing: border-box; padding: 10px; font-size: 16px; border: 1px solid #ccc; border-radius: 6px; }
+  #zoom { position: fixed; inset: 0; background: rgba(0,0,0,.9); display: none; align-items: center; justify-content: center; z-index: 9; }
+  #zoom img { max-width: 100%; max-height: 100%; }
+  textarea { width: 100%; height: 120px; font-size: 12px; }
+  details summary { cursor: pointer; }
+  table { border-collapse: collapse; font-size: 13px; }
+  td, th { border: 1px solid #ddd; padding: 4px; vertical-align: top; }
+  .hide { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>试穿效果打分</h1>
+
+  <div id="start" class="card">
+    <p>每次给你看三张图：<b>人</b>、<b>要穿的衣服</b>、<b>AI 换衣结果</b>。你只给结果打分。</p>
+    <p>一共 <span id="total"></span> 张，一张大约 20 秒。可以随时关掉，下次用<b>同一部手机/电脑、同一个浏览器、同一个名字</b>打开会接着做。</p>
+    <p>请自己独立打，别和别人对答案。觉得哪里不对就按看到的打，没有标准答案。</p>
+    <p style="font-size:13px;color:#888">图片来自公开研究数据集 VITON-HD（CC BY-NC 4.0），仅用于这次打分，请勿转发或保存。</p>
+    <input id="name" type="text" placeholder="你的名字或昵称（只用来区分不同的人）">
+    <p><button class="big" id="go">开始 / 继续</button></p>
+  </div>
+
+  <div id="main" class="hide">
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;font-size:14px"><span id="who"></span><span id="prog"></span></div>
+      <div class="bar"><div id="barfill"></div></div>
+    </div>
+    <div class="card">
+      <div class="imgs">
+        <figure><img id="ip" alt="人"><figcaption>人</figcaption></figure>
+        <figure><img id="ig" alt="衣服"><figcaption>要穿的衣服</figcaption></figure>
+        <figure><img id="io" alt="结果"><figcaption><b>结果（给它打分）</b></figcaption></figure>
+      </div>
+      <div style="font-size:12px;color:#888;margin-top:4px">点图片可以放大</div>
+    </div>
+    <div class="card" id="qs"></div>
+    <div class="nav">
+      <button class="sec" id="prev">上一张</button>
+      <button id="next" disabled>下一张</button>
+    </div>
+    <div class="card">
+      <details>
+        <summary>打分标准（看不准时点开）</summary>
+        <div id="rubric"></div>
+      </details>
+    </div>
+    <div class="card" id="exportCard">
+      <p id="doneMsg"></p>
+      <p><button class="big" id="dl">下载我的打分表</button></p>
+      <p style="font-size:13px">下载不了的话，点下面复制，把文字发给收集人：</p>
+      <p><button class="big sec" id="cp" style="background:#ddd;color:#222">复制打分内容</button></p>
+      <textarea id="csv" readonly class="hide"></textarea>
+      <p style="font-size:12px;color:#888"><a href="#" id="switch">换一个名字</a></p>
+    </div>
+  </div>
+</div>
+<div id="zoom"><img alt=""></div>
+
+<script>
+const ITEMS = [{"s": "G01", "n": "1"}, {"s": "G01", "n": "2"}, {"s": "G01", "n": "3"}, {"s": "G01", "n": "4"}, {"s": "G02", "n": "1"}, {"s": "G02", "n": "2"}, {"s": "G02", "n": "3"}, {"s": "G02", "n": "4"}, {"s": "G03", "n": "1"}, {"s": "G03", "n": "2"}, {"s": "G03", "n": "3"}, {"s": "G03", "n": "4"}, {"s": "G04", "n": "1"}, {"s": "G04", "n": "2"}, {"s": "G04", "n": "3"}, {"s": "G04", "n": "4"}, {"s": "G05", "n": "1"}, {"s": "G05", "n": "2"}, {"s": "G05", "n": "3"}, {"s": "G05", "n": "4"}, {"s": "G06", "n": "1"}, {"s": "G06", "n": "2"}, {"s": "G06", "n": "3"}, {"s": "G06", "n": "4"}, {"s": "G07", "n": "1"}, {"s": "G07", "n": "2"}, {"s": "G07", "n": "3"}, {"s": "G07", "n": "4"}, {"s": "G08", "n": "1"}, {"s": "G08", "n": "2"}, {"s": "G08", "n": "3"}, {"s": "G08", "n": "4"}, {"s": "G10", "n": "1"}, {"s": "G10", "n": "2"}, {"s": "G10", "n": "3"}, {"s": "G10", "n": "4"}, {"s": "G11", "n": "1"}, {"s": "G11", "n": "2"}, {"s": "G11", "n": "3"}, {"s": "G11", "n": "4"}, {"s": "G12", "n": "1"}, {"s": "G12", "n": "2"}, {"s": "G12", "n": "3"}, {"s": "G12", "n": "4"}, {"s": "G14", "n": "1"}, {"s": "G14", "n": "2"}, {"s": "G14", "n": "3"}, {"s": "G14", "n": "4"}, {"s": "G15", "n": "1"}, {"s": "G15", "n": "2"}, {"s": "G15", "n": "3"}, {"s": "G15", "n": "4"}, {"s": "G16", "n": "1"}, {"s": "G16", "n": "2"}, {"s": "G16", "n": "3"}, {"s": "G16", "n": "4"}, {"s": "G17", "n": "1"}, {"s": "G17", "n": "2"}, {"s": "G17", "n": "3"}, {"s": "G17", "n": "4"}, {"s": "G18", "n": "1"}, {"s": "G18", "n": "2"}, {"s": "G18", "n": "3"}, {"s": "G18", "n": "4"}, {"s": "G19", "n": "1"}, {"s": "G19", "n": "2"}, {"s": "G19", "n": "3"}, {"s": "G19", "n": "4"}, {"s": "G20", "n": "1"}, {"s": "G20", "n": "2"}, {"s": "G20", "n": "3"}, {"s": "G20", "n": "4"}];
+const HEADER = ["sample ID", "anonymous set number", "identity 1-5", "body shape 1-5", "garment 1-5", "overall 1-5", "severe artifact Y/N"];
+const PACK = "blind_v2";
+
+const QS = [
+  { k: "id", t: "身份", d: "还像不像原来这个人（脸、肤色、发型）", h: [
+    "已经不像这个人，或脸崩了", "勉强能认，脸或发型明显错了", "还是这个人，但有清楚偏差", "还是这个人，只剩小问题", "看不出身份被改"] },
+  { k: "body", t: "体型", d: "胸、腰、臀和比例有没有变（变瘦、美化不算加分）", h: [
+    "比例已经不像这个人", "体型明显歪，或明显被变瘦、改胸腰臀", "轮廓有清楚偏差，没有明显美化", "体型还在，只剩小问题", "看不出体型被改，也没有美化"] },
+  { k: "garment", t: "衣服", d: "对照中间那件衣服：颜色、文字、图案、领、袖、长度", h: [
+    "认不出目标衣服，或衣服基本没换", "大样子还在，但颜色/图案/领/袖/长度有明显错", "能认出这件衣服，有清楚的问题", "衣服对，只剩小问题", "看不出错，文字和图案也对"] },
+  { k: "overall", t: "整体", d: "整体能不能用", h: [
+    "不可用，人或衣服已经不像", "明显错误，但还能看出大概", "能认出人和衣服，有清楚的问题", "可用，只剩小问题", "可信，看不出毛病"] },
+  { k: "sev", t: "有没有严重崩坏", d: "肢体缺失、脸崩、大块涂抹，有一项就选「有」", yn: true },
+];
+
+const $ = (id) => document.getElementById(id);
+let st = null, key = null;
+
+function hashStr(s) { let h = 2166136261; for (const c of s) { h ^= c.codePointAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+function shuffled(seed) {
+  const a = ITEMS.map((_, i) => i);
+  let x = seed || 1;
+  const rnd = () => { x ^= x << 13; x ^= x >>> 17; x ^= x << 5; return (x >>> 0) / 4294967296; };
+  for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+  return a;
+}
+function save() { localStorage.setItem(key, JSON.stringify(st)); }
+function itemKey(it) { return it.s + "|" + it.n; }
+function complete(a) { return a && QS.every((q) => a[q.k] != null); }
+function doneCount() { return ITEMS.filter((it) => complete(st.ans[itemKey(it)])).length; }
+
+function start() {
+  const name = $("name").value.trim();
+  if (!name) { $("name").focus(); return; }
+  key = "rate:" + PACK + ":" + name;
+  st = JSON.parse(localStorage.getItem(key) || "null");
+  if (!st) st = { name, order: shuffled(hashStr(name + Date.now())), pos: 0, ans: {} };
+  localStorage.setItem("rate:last", name);
+  // 接着做第一张没打完的
+  const firstOpen = st.order.findIndex((i) => !complete(st.ans[itemKey(ITEMS[i])]));
+  st.pos = firstOpen === -1 ? st.order.length - 1 : firstOpen;
+  save();
+  $("start").classList.add("hide");
+  $("main").classList.remove("hide");
+  $("who").textContent = "评分人：" + name;
+  render();
+}
+
+function render() {
+  const it = ITEMS[st.order[st.pos]];
+  const base = "../images/" + it.s + "/";
+  $("ip").src = base + "person.jpg";
+  $("ig").src = base + "garment.jpg";
+  $("io").src = base + "set_" + it.n + ".jpg";
+  const a = st.ans[itemKey(it)] || {};
+  const box = $("qs"); box.innerHTML = "";
+  for (const q of QS) {
+    const div = document.createElement("div"); div.className = "q";
+    div.innerHTML = "<b>" + q.t + " <small>" + q.d + "</small></b>";
+    const opts = document.createElement("div"); opts.className = "opts";
+    const hint = document.createElement("div"); hint.className = "hint";
+    const vals = q.yn ? [["Y", "有"], ["N", "没有"]] : [1, 2, 3, 4, 5].map((v) => [v, String(v)]);
+    for (const [v, label] of vals) {
+      const b = document.createElement("button"); b.textContent = label;
+      if (a[q.k] === v) b.classList.add("on");
+      b.onclick = () => {
+        const cur = st.ans[itemKey(it)] = st.ans[itemKey(it)] || {};
+        cur[q.k] = v; save(); render();
+      };
+      opts.appendChild(b);
+    }
+    if (!q.yn && a[q.k] != null) hint.textContent = a[q.k] + " 分：" + q.h[a[q.k] - 1];
+    div.appendChild(opts); div.appendChild(hint); box.appendChild(div);
+  }
+  const n = doneCount();
+  $("prog").textContent = "已完成 " + n + " / " + ITEMS.length;
+  $("barfill").style.width = (100 * n / ITEMS.length) + "%";
+  $("prev").disabled = st.pos === 0;
+  $("next").disabled = !complete(a) || st.pos === st.order.length - 1;
+  $("doneMsg").textContent = n === ITEMS.length
+    ? "全部做完了，谢谢！请下载打分表发给收集人。"
+    : "做了一部分也可以先下载发过来；下次接着做完再发一次完整的。";
+}
+
+function csvText() {
+  const lines = [HEADER.join(",")];
+  for (const it of ITEMS) {
+    const a = st.ans[itemKey(it)] || {};
+    const f = (k) => (a[k] == null ? "" : String(a[k]));
+    lines.push([it.s, it.n, f("id"), f("body"), f("garment"), f("overall"), f("sev")].join(","));
+  }
+  return lines.join("\n") + "\n";
+}
+function fileName() { return PACK + "_" + st.name.replace(/[^\w一-龥-]+/g, "_") + ".csv"; }
+
+$("total").textContent = ITEMS.length;
+$("name").value = localStorage.getItem("rate:last") || "";
+$("go").onclick = start;
+$("name").onkeydown = (e) => { if (e.key === "Enter") start(); };
+$("prev").onclick = () => { if (st.pos > 0) { st.pos--; save(); render(); scrollTo(0, 0); } };
+$("next").onclick = () => { if (st.pos < st.order.length - 1) { st.pos++; save(); render(); scrollTo(0, 0); } };
+$("dl").onclick = () => {
+  const blob = new Blob([csvText()], { type: "text/csv" });
+  const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = fileName(); a.click();
+};
+$("cp").onclick = async () => {
+  const t = $("csv"); t.value = "# " + fileName() + "\n" + csvText(); t.classList.remove("hide");
+  try { await navigator.clipboard.writeText(t.value); $("cp").textContent = "已复制"; }
+  catch { t.select(); $("cp").textContent = "请长按上面文字手动复制"; }
+};
+$("switch").onclick = (e) => { e.preventDefault(); $("main").classList.add("hide"); $("start").classList.remove("hide"); };
+for (const id of ["ip", "ig", "io"]) $(id).onclick = (e) => { $("zoom").querySelector("img").src = e.target.src; $("zoom").style.display = "flex"; };
+$("zoom").onclick = () => { $("zoom").style.display = "none"; };
+$("rubric").innerHTML = "<table><tr><th>分</th>" + QS.slice(0, 4).map((q) => "<th>" + q.t + "</th>").join("") + "</tr>" +
+  [0, 1, 2, 3, 4].map((i) => "<tr><td>" + (i + 1) + "</td>" + QS.slice(0, 4).map((q) => "<td>" + q.h[i] + "</td>").join("") + "</tr>").join("") +
+  "</table><p>严重崩坏：肢体缺失、脸崩、大块涂抹。和 1–5 分分开选。</p>";
+</script>
+</body>
+</html>
